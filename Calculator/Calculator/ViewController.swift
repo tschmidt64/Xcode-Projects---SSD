@@ -9,88 +9,118 @@
 import UIKit
 
 class ViewController: UIViewController {
-    
+    enum selection {case DIGIT, OP, EQUAL, AC}
+    var valueStack: [Double] = []
     var operatorStack: [String] = []
-    var postfixArr: [String] = []
-    var expectingOperator = false
-    var newExpression = true
+    var valueStr: String = ""
+    var previousSelection = selection.AC
     @IBOutlet weak var display: UILabel!
     
     
     @IBAction func digitSelected(sender: UIButton) {
-        if newExpression {
-            newExpression = false
-            display.text = sender.currentTitle!
-        } else {
-            display.text! += sender.currentTitle!
+        
+        switch previousSelection {
+        case .EQUAL:
+            allClearSelected(sender)
+        case .DIGIT, .OP, .AC: break // don't do shit yo
         }
-        expectingOperator = true
+        
+        valueStr += sender.currentTitle!
+        display.text = valueStr
+        previousSelection = .DIGIT
     }
     
     
     @IBAction func allClearSelected(sender: UIButton) {
-        display.text = "Enter an expression"
-        postfixArr = []
-        expectingOperator = false
-        newExpression = true
+        previousSelection = .AC
+        valueStack = []
+        operatorStack = []
+        display.text = "Math Time Bitch"
+        valueStr = ""
     }
     
     @IBAction func operatorSelected(sender: UIButton) {
-        if expectingOperator {
-            expectingOperator = false
-            display.text! += " \(sender.currentTitle!) "
+        
+        
+        let op: String = sender.currentTitle!
+        
+        switch previousSelection {
+        case .DIGIT:
+            // add accruing value to valueStack
+            pushValue()
+            // if op stack isn't empty and the precedence isn't higher than top of operator stack, then evaluate top operator
+            if !operatorStack.isEmpty && !higherPrecedence(op) {
+                let eval = evaluateOperator()
+                valueStack.insert(eval, atIndex: 0)
+                print("Evaled op: \(eval)")
+            }
+            operatorStack.insert(op, atIndex: 0)
+            previousSelection = .OP
+        case .OP:
+            // replace previous op with new op
+            operatorStack.removeAtIndex(0)
+            operatorStack.insert(op, atIndex: 0)
+            previousSelection = .OP
+        case .EQUAL:
+            // if op stack isn't empty and the precedence isn't higher than top of operator stack, then evaluate top operator
+            if !operatorStack.isEmpty && !higherPrecedence(op) {
+                let eval = evaluateOperator()
+                valueStack.insert(eval, atIndex: 0)
+                print("Evaled op: \(eval)")
+            }
+            operatorStack.insert(op, atIndex: 0)
+            previousSelection = .OP
+        case .AC: break  // don't do shit yo
+        }
+    }
+    
+    func higherPrecedence(op: String) -> Bool {
+        if (op == "×" || op == "÷") && (operatorStack.first! == "+" || operatorStack.first! == "−") {
+            print("Op \(op) has higher precedence than \(operatorStack.first!)")
+            return true;
+        }
+        else {
+            print("Op \(op) has lower precedence than \(operatorStack.first!)")
+            return false;
+        }
+    }
+    
+    func pushValue() {
+        if valueStr != "" {
+            print("Pushed value \(valueStr)")
+            valueStack.insert((valueStr as NSString).doubleValue, atIndex: 0)
+            display.text = "\(valueStr)"
+            valueStr = ""
+        }
+    }
+    
+    func evaluateOperator() -> Double {
+        let op: String = operatorStack.removeAtIndex(0)
+        let val1: Double = valueStack.removeAtIndex(0)
+        let val2: Double = valueStack.removeAtIndex(0)
+        switch op {
+        case "+": return val2 + val1
+        case "−": return val2 - val1
+        case "×": return val2 * val1
+        case "÷": return val2 / val1
+        default: assert(false, "\(op) isn't a valid operator")
         }
     }
     
     @IBAction func equalsSelected(sender: UIButton) {
-        createPostFixExpr(display.text!)
-        display.text = "\(evaluatePostFixExpression())"
-        newExpression = true
+        switch previousSelection {
+        case .DIGIT:
+            pushValue()
+            while !operatorStack.isEmpty { valueStack.insert(evaluateOperator(), atIndex: 0) }
+            display.text = "\(valueStack.first!)"
+        case .OP:
+            // discard previous operation
+            operatorStack.removeAtIndex(0)
+            while !operatorStack.isEmpty { valueStack.insert(evaluateOperator(), atIndex: 0) }
+            display.text = "\(valueStack.first!)"
+        case .AC, .EQUAL: break     // don't do shit yo
+        }
         
-    }
-    
-    func createPostFixExpr(expr: String) {
-        var exprArr = split(expr) { $0 == " " }
-        for str in exprArr {
-            switch str {
-            case "+", "−":
-                while operatorStack.count != 0  {
-                    postfixArr.append(operatorStack.removeLast())
-                }
-                operatorStack.append(str)
-                println(operatorStack)
-            case "×", "÷":
-                while operatorStack.count != 0 && (operatorStack.last! == "×" || operatorStack.last! == "÷") {
-                    postfixArr.append(operatorStack.removeLast())
-                }
-                operatorStack.append(str)
-            default: // if it's a number
-                postfixArr.append(str)
-            }
-        }
-        while operatorStack.count != 0 { postfixArr.append(operatorStack.removeLast()) }
-        println(postfixArr)
-    }
-
-    func evaluatePostFixExpression() -> Double {
-        var valStack: [Double] = []
-        postfixArr = postfixArr.reverse()
-        while (postfixArr.count != 0) {
-            println(valStack)
-            if postfixArr.last == "×" || postfixArr.last == "÷" || postfixArr.last == "−" || postfixArr.last == "+" {
-                let op1 = (valStack.removeLast())
-                let op2 = (valStack.removeLast())
-                if postfixArr.last == "×" {valStack.append(op1 * op2)}
-                else if postfixArr.last == "÷" {valStack.append(op2 / op1)}
-                else if postfixArr.last == "−" {valStack.append(op2 - op1)}
-                else if postfixArr.last == "+" {valStack.append(op1 + op2)}
-                else {println("ERROR!!!")}
-                postfixArr.removeLast()
-            } else {
-                valStack.append((postfixArr.removeLast() as NSString).doubleValue)
-            }
-        }
-        if valStack.count != 1 { println("ERROR!!!!") }
-        return valStack.last!
+        previousSelection = .EQUAL
     }
 }
